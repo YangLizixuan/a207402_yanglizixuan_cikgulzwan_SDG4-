@@ -3,14 +3,16 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.kapt)
+    id("com.google.gms.google-services")
+
 }
 
 android {
-    namespace = "com.example.a207402_yanglizixuan_cikgulzwan_lab5"
+    namespace = "com.example.a207402_yanglizixuan_cikgulzwan_Project2"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.a207402_yanglizixuan_cikgulzwan_lab5"
+        applicationId = "com.example.a207402_yanglizixuan_cikgulzwan_Project2"
         minSdk = 26
         targetSdk = 33
         versionCode = 1
@@ -49,6 +51,16 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    // Firebase
+    implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
+    implementation("com.google.firebase:firebase-firestore-ktx")
+
+    // Retrofit 网络请求
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // GPS 定位
+    implementation("com.google.android.gms:play-services-location:21.2.0")
 
     // 测试
     testImplementation("junit:junit:4.13.2")

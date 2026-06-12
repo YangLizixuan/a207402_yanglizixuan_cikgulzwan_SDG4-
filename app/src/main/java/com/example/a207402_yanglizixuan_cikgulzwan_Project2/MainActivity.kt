@@ -1,9 +1,13 @@
-package com.example.a207402_yanglizixuan_cikgulzwan_lab5
+package com.example.a207402_yanglizixuan_cikgulzwan_Project2
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -28,10 +32,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -44,12 +50,44 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.a207402_yanglizixuan_cikgulzwan_lab5.ui.theme.A207402_YangLizixuan_Cikgulzwan_Lab5Theme
-import com.example.a207402_yanglizixuan_cikgulzwan_lab5.ui.theme.appAccentColor
-import com.example.a207402_yanglizixuan_cikgulzwan_lab5.ui.theme.appPrimaryColor
+import com.example.a207402_yanglizixuan_cikgulzwan_Project2.ui.theme.A207402_YangLizixuan_Cikgulzwan_Lab5Theme
+import com.example.a207402_yanglizixuan_cikgulzwan_Project2.ui.theme.appAccentColor
+import com.example.a207402_yanglizixuan_cikgulzwan_Project2.ui.theme.appPrimaryColor
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.GET
 import kotlin.collections.emptyList
+
+//-----------------------网络代码--------------------------
+const val BASE_URL = "https://api.quotable.io/"
+
+interface QuoteApi {
+    @GET("random")
+    suspend fun getRandomQuote(): Quote
+}
+
+data class Quote(
+    val content: String,
+    val author: String
+)
+
+object RetrofitClient {
+    val api: QuoteApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(QuoteApi::class.java)
+    }
+}
 
 // ====================== Repository ======================
 class DiaryRepository(private val dao: DiaryDao) {
@@ -93,12 +131,29 @@ sealed class Screen(val route: String) {
     object Profile : Screen("profile")
     object History : Screen("history")
     object Setting : Screen("setting")
+    object ApiPage : Screen("api_page")
+    object SensorPage : Screen("sensor_page")
 }
 
 // ====================== 主活动 ======================
 class MainActivity : ComponentActivity() {
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private val firestore = FirebaseFirestore.getInstance()
+
+    private val requestLocationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissionsMap ->
+        val granted = permissionsMap[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        if (!granted) {
+            Toast.makeText(this, "需要定位权限", Toast.LENGTH_SHORT).show()
+        }
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        requestLocationPermission.launch(
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        )
         enableEdgeToEdge()
         setContent {
             A207402_YangLizixuan_Cikgulzwan_Lab5Theme {
@@ -113,7 +168,7 @@ class MainActivity : ComponentActivity() {
                     startDestination = Screen.Home.route
                 ) {
                     composable(Screen.Home.route) {
-                        HomeScreen(navController, viewModel)
+                        HomeScreen(navController, viewModel , firestore)
                     }
                     composable(Screen.Preview.route) {
                         PreviewScreen(navController, viewModel)
@@ -127,6 +182,12 @@ class MainActivity : ComponentActivity() {
                     composable(Screen.Setting.route) {
                         SettingScreen(navController)
                     }
+                    composable(Screen.ApiPage.route) {
+                        ApiDataScreen(navController)
+                    }
+                    composable(Screen.SensorPage.route) {
+                        SensorGpsScreen(navController, fusedLocationClient)
+                    }
                 }
             }
         }
@@ -135,10 +196,9 @@ class MainActivity : ComponentActivity() {
 
 // ====================== 首页 ======================
 @Composable
-fun HomeScreen(
-    navController: NavController,
-    viewModel: DiaryViewModel
-) {
+fun HomeScreen(navController: NavController, viewModel: DiaryViewModel, firestore: FirebaseFirestore) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var inputText by remember { mutableStateOf("") }
     var isExpanded by remember { mutableStateOf(true) }
 
@@ -156,6 +216,15 @@ fun HomeScreen(
                 fontWeight = FontWeight.Bold,
                 color = appPrimaryColor
             )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(onClick = { navController.navigate(Screen.ApiPage.route) }) { Text("网络API") }
+                Button(onClick = { navController.navigate(Screen.SensorPage.route) }) { Text("GPS传感器") }
+            }
         }
 
         Card(
@@ -322,42 +391,61 @@ fun HomeScreen(
             colors = CardDefaults.cardColors(Color.White),
             elevation = CardDefaults.cardElevation(2.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("📷", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(end = 8.dp))
-                TextField(
-                    value = inputText,
-                    onValueChange = { inputText = it },
-                    placeholder = { Text("发消息或按住说话...", color = Color.Gray) },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
-                )
-                Button(onClick = {
-                    viewModel.saveDiary(inputText)
-                    inputText = ""
-                }) {
-                    Text("发送")
+            Column(Modifier.padding(12.dp)) {
+                // 输入行：图标 + 输入框
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("📷", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(end = 8.dp))
+                    TextField(
+                        value = inputText,
+                        onValueChange = { inputText = it },
+                        placeholder = { Text("发消息或按住说话...", color = Color.Gray) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                // 按钮行：发送 + 分享（单独一行，横向均分）
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.saveDiary(inputText)
+                            inputText = ""
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("发送")
+                    }
+
+                    Button(
+                        onClick = {
+                            if(inputText.isNotBlank()){
+                                scope.launch(Dispatchers.IO) {
+                                    val data = hashMapOf("content" to inputText)
+                                    firestore.collection("community_notes").add(data).await()
+                                    withContext(Dispatchers.Main){
+                                        Toast.makeText(context,"已上传至云端社区",Toast.LENGTH_SHORT).show()
+                                        inputText = ""
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("分享到云端社区(Firebase)")
+                    }
                 }
             }
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 40.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Text("首页", style = MaterialTheme.typography.titleMedium, color = appPrimaryColor)
-            Text("预览", style = MaterialTheme.typography.titleMedium, color = appPrimaryColor)
-            Text("历史", style = MaterialTheme.typography.titleMedium, color = appPrimaryColor)
-            Text("设置", style = MaterialTheme.typography.titleMedium, color = appPrimaryColor)
-            Text("我的", style = MaterialTheme.typography.titleMedium, color = appPrimaryColor)
-        }
-
+        // 底部导航按钮 不变
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -371,7 +459,7 @@ fun HomeScreen(
             Button(onClick = { navController.navigate(Screen.Profile.route) }) { Text("我的") }
         }
     }
-}
+    }
 
 // ====================== 预览页 ======================
 @Composable
@@ -475,6 +563,121 @@ fun SettingScreen(navController: NavController) {
     }
 }
 
+//---------------网络 API 页面----------------------
+@Composable
+fun ApiDataScreen(navController: NavController) {
+    var quoteText by remember { mutableStateOf("点击按钮加载网络数据") }
+    var authorText by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(30.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("🌐 网络API数据(Retrofit)", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(Modifier.padding(20.dp)) {
+                Text(quoteText, style = MaterialTheme.typography.bodyLarge)
+                Text(authorText, modifier = Modifier.padding(top = 8.dp), color = Color.Gray)
+            }
+        }
+
+        Button(onClick = {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val result = RetrofitClient.api.getRandomQuote()
+                    withContext(Dispatchers.Main) {
+                        quoteText = result.content
+                        authorText = "—— ${result.author}"
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        quoteText = "Network request failed. Please check your network connection."
+                        authorText = ""
+                    }
+                }
+            }
+        }) {
+            Text("加载随机名言(API)")
+        }
+
+        Button(
+            onClick = { navController.popBackStack() },
+            modifier = Modifier.padding(top = 20.dp)
+        ) {
+            Text("返回首页")
+        }
+    }
+}
+
+//-------------------------------GPS 传感器页面--------------------------------------
+@Composable
+fun SensorGpsScreen(
+    navController: NavController,
+    locationClient: FusedLocationProviderClient
+) {
+    var locationInfo by remember { mutableStateOf("点击按钮获取GPS定位") }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(30.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("📍 GPS 定位传感器", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Text(
+                text = locationInfo,
+                modifier = Modifier.padding(20.dp),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+
+        Button(onClick = {
+            if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                locationClient.lastLocation.addOnSuccessListener { location ->
+                    location?.let {
+                        locationInfo = "纬度：${it.latitude}\n经度：${it.longitude}"
+                    } ?: run {
+                        locationInfo = "无法获取定位，请开启手机定位"
+                    }
+                }
+            } else {
+                locationInfo = "定位权限未开启"
+            }
+        }) {
+            Text("获取当前位置")
+        }
+
+        Button(
+            onClick = { navController.popBackStack() },
+            modifier = Modifier.padding(top = 20.dp)
+        ) {
+            Text("返回首页")
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun DefaultPreview() {
@@ -484,6 +687,6 @@ fun DefaultPreview() {
         val db = DiaryDatabase.getInstance(ctx)
         val repo = DiaryRepository(db.diaryDao())
         val vm: DiaryViewModel = viewModel(factory = DiaryViewModelFactory(repo))
-        HomeScreen(nav, vm)
+        HomeScreen(nav, vm, FirebaseFirestore.getInstance())
     }
 }

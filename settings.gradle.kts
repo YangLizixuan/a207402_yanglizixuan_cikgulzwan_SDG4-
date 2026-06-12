@@ -10,6 +10,9 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    plugins {
+        id("com.google.gms.google-services") version "4.4.1" apply false
+    }
 }
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
@@ -23,6 +26,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "a207402_YangLizixuan_Cikgulzwan_Lab5"
+rootProject.name = "a207402_YangLizixuan_Cikgulzwan_Project2"
 include(":app")
  

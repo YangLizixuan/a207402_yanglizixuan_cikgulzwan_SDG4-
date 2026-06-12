@@ -1,4 +1,4 @@
-package com.example.a207402_yanglizixuan_cikgulzwan_lab5
+package com.example.a207402_yanglizixuan_cikgulzwan_Project2
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4

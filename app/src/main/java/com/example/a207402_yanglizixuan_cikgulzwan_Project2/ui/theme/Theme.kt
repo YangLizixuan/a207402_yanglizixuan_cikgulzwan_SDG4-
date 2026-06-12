@@ -1,4 +1,4 @@
-package com.example.a207402_yanglizixuan_cikgulzwan_lab5.ui.theme
+package com.example.a207402_yanglizixuan_cikgulzwan_Project2.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
