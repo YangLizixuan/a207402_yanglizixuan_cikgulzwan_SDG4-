@@ -61,6 +61,7 @@ dependencies {
 
     // GPS 定位
     implementation("com.google.android.gms:play-services-location:21.2.0")
+    implementation(libs.androidx.monitor)
 
     // 测试
     testImplementation("junit:junit:4.13.2")
