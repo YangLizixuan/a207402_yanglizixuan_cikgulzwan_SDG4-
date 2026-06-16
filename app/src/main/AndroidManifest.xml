@@ -3,8 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 高精度定位 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- 粗略网络定位（兼容低精度模式） -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 声明设备需要GPS硬件 -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
     <application
         android:allowBackup="true"

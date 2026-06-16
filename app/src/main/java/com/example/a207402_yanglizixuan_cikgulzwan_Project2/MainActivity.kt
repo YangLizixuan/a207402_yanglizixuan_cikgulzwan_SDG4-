@@ -2,6 +2,7 @@ package com.example.a207402_yanglizixuan_cikgulzwan_Project2
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.location.Location
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -55,7 +56,10 @@ import com.example.a207402_yanglizixuan_cikgulzwan_Project2.ui.theme.appAccentCo
 import com.example.a207402_yanglizixuan_cikgulzwan_Project2.ui.theme.appPrimaryColor
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -67,26 +71,27 @@ import retrofit2.http.GET
 import kotlin.collections.emptyList
 
 //-----------------------网络代码--------------------------
-const val BASE_URL = "https://api.quotable.io/"
+// 原 api.quotable.io 已停服，改用免 key、HTTPS 的 dummyjson 接口
+const val BASE_URL = "https://dummyjson.com/"
 
 interface QuoteApi {
-    @GET("random")
+    @GET("quotes/random")
     suspend fun getRandomQuote(): Quote
 }
 
 data class Quote(
-    val content: String,
+    // dummyjson 返回字段为 "quote"，映射到原有的 content，保持下游代码不变
+    @SerializedName("quote") val content: String,
     val author: String
 )
-
+// Retrofit客户端单例
 object RetrofitClient {
-    val api: QuoteApi by lazy {
-        Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(QuoteApi::class.java)
-    }
+    private val retrofit = Retrofit.Builder()
+        .baseUrl(BASE_URL)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+
+    val api: QuoteApi = retrofit.create(QuoteApi::class.java)
 }
 
 // ====================== Repository ======================
@@ -620,6 +625,7 @@ fun ApiDataScreen(navController: NavController) {
 }
 
 //-------------------------------GPS 传感器页面--------------------------------------
+
 @Composable
 fun SensorGpsScreen(
     navController: NavController,
@@ -627,7 +633,8 @@ fun SensorGpsScreen(
 ) {
     var locationInfo by remember { mutableStateOf("点击按钮获取GPS定位") }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    // 定位取消令牌，防止页面销毁后回调修改UI崩溃
+    val cancelTokenSource = remember { CancellationTokenSource() }
 
     Column(
         modifier = Modifier
@@ -636,12 +643,16 @@ fun SensorGpsScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("📍 GPS 定位传感器", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(
+            text = "📍 GPS 定位传感器",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
 
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(vertical = 20.dp),
             shape = RoundedCornerShape(20.dp)
         ) {
             Text(
@@ -651,24 +662,40 @@ fun SensorGpsScreen(
             )
         }
 
+        // 获取定位按钮
         Button(onClick = {
-            if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED
-            ) {
-                locationClient.lastLocation.addOnSuccessListener { location ->
-                    location?.let {
-                        locationInfo = "纬度：${it.latitude}\n经度：${it.longitude}"
-                    } ?: run {
-                        locationInfo = "无法获取定位，请开启手机定位"
+            // 正确权限检测，删除错误的 p0= 语法
+            val permissionResult = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+            val hasLocationPermission = permissionResult == PackageManager.PERMISSION_GRANTED
+
+            if (!hasLocationPermission) {
+                locationInfo = "未授予定位权限，请去系统设置开启权限"
+                return@Button
+            }
+
+            // 发起实时高精度单次定位
+            locationClient.getCurrentLocation(
+                Priority.PRIORITY_HIGH_ACCURACY,
+                cancelTokenSource.token
+            )
+                .addOnSuccessListener { location: Location? ->
+                    if (location != null) {
+                        // 成功拿到经纬度
+                        locationInfo = "纬度：${location.latitude}\n经度：${location.longitude}"
+                    } else {
+                        // 权限有，但无定位数据（室内/定位关闭）
+                        locationInfo = "获取不到位置，请打开手机高精度定位，到室外重试"
                     }
                 }
-            } else {
-                locationInfo = "定位权限未开启"
-            }
+                .addOnFailureListener { error ->
+                    // 定位服务异常捕获
+                    locationInfo = "定位失败：${error.message}\n请检查GPS开关是否打开"
+                }
         }) {
             Text("获取当前位置")
         }
 
+        // 返回按钮
         Button(
             onClick = { navController.popBackStack() },
             modifier = Modifier.padding(top = 20.dp)

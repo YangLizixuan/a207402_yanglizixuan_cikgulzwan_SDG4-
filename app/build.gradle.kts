@@ -58,10 +58,13 @@ dependencies {
     // Retrofit 网络请求
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    // 协程
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // GPS 定位
     implementation("com.google.android.gms:play-services-location:21.2.0")
     implementation(libs.androidx.monitor)
+    implementation(libs.androidx.compilercommon)
 
     // 测试
     testImplementation("junit:junit:4.13.2")

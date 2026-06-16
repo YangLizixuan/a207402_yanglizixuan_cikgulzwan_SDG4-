@@ -10,6 +10,7 @@ kotlin = "2.2.10"
 composeBom = "2024.09.00"
 room = "2.7.1"
 monitor = "1.8.0"
+compilercommon = "3.2.0-alpha11"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -30,6 +31,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-monitor = { group = "androidx.test", name = "monitor", version.ref = "monitor" }
+androidx-compilercommon = { group = "androidx.databinding", name = "compilerCommon", version.ref = "compilercommon" }
 
 
 [plugins]
